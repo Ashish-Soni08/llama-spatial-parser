@@ -24,6 +24,11 @@ ENV/
 node_modules/
 package-lock.json
 
+# Next.js
+.next/
+out/
+next-env.d.ts
+
 # IDE
 .idea/
 .vscode/
