@@ -19,18 +19,24 @@ logger = logging.getLogger(__name__)
 # The name of the collection to use for storing extracted data.
 # When developing locally, this will use the _public collection (shared within the project),
 # otherwise agent data is isolated to each agent.
-EXTRACTED_DATA_COLLECTION: str = "extraction-review"
+EXTRACTED_DATA_COLLECTION: str = "research-papers"
 
 
 class ExtractSettings(BaseModel):
-    """Extraction settings loaded from configs/config.json extract.settings."""
+    """Extraction settings loaded from configs/config.json extract.settings.
 
-    extraction_mode: Literal["FAST", "PREMIUM", "MULTIMODAL"]
+    Key settings for visual citations:
+    - cite_sources: Enables bounding box coordinates (x, y, w, h) and page numbers
+    - chunk_mode: SECTION for paragraph/section-level chunking
+    """
+
+    extraction_mode: Literal["FAST", "BALANCED", "MULTIMODAL", "PREMIUM"] = "PREMIUM"
     system_prompt: str | None = None
-    citation_bbox: bool = False
+    cite_sources: bool = True
     use_reasoning: bool = False
-    cite_sources: bool = False
     confidence_scores: bool = False
+    chunk_mode: Literal["PAGE", "SECTION"] = "SECTION"
+    high_resolution_mode: bool = False
 
 
 class ExtractConfig(BaseModel):

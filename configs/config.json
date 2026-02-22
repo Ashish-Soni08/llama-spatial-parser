@@ -3,29 +3,111 @@
     "json_schema": {
       "type": "object",
       "properties": {
-        "document_type": {
-          "type": "string",
-          "description": "An overarching category for the type of document (e.g. invoice, purchase order, etc.)"
+        "title": {
+          "type": ["string", "null"],
+          "description": "The full title of the research paper"
         },
-        "summary": {
-          "type": "string",
-          "description": "A 2-3 sentence summary describing the content of the document"
-        },
-        "key_points": {
+        "authors": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "A list of key points or insights from the document"
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Full name of the author"
+              },
+              "affiliation": {
+                "type": ["string", "null"],
+                "description": "Institution or organization the author is affiliated with"
+              }
+            },
+            "required": ["name", "affiliation"]
+          },
+          "description": "List of paper authors with their affiliations"
+        },
+        "abstract": {
+          "type": ["string", "null"],
+          "description": "The abstract or summary section of the paper"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "heading": {
+                "type": "string",
+                "description": "Section heading or title (e.g., Introduction, Methods, Results)"
+              },
+              "content": {
+                "type": "string",
+                "description": "Full text content of this section, preserving paragraph structure"
+              }
+            },
+            "required": ["heading", "content"]
+          },
+          "description": "Main content sections of the paper, each with heading and full text"
+        },
+        "figures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "figure_id": {
+                "type": "string",
+                "description": "Figure number or identifier (e.g., 'Figure 1', 'Fig. 2a')"
+              },
+              "caption": {
+                "type": "string",
+                "description": "The caption text describing the figure"
+              }
+            },
+            "required": ["figure_id", "caption"]
+          },
+          "description": "Figures and charts referenced in the paper"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "table_id": {
+                "type": "string",
+                "description": "Table number or identifier (e.g., 'Table 1')"
+              },
+              "caption": {
+                "type": ["string", "null"],
+                "description": "The caption or title of the table"
+              },
+              "content": {
+                "type": "string",
+                "description": "Textual representation of the table data"
+              }
+            },
+            "required": ["table_id", "caption", "content"]
+          },
+          "description": "Tables with their data and captions"
+        },
+        "key_findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Main conclusions, findings, or contributions stated in the paper"
+        },
+        "references_count": {
+          "type": ["integer", "null"],
+          "description": "Total number of references/citations in the bibliography"
         }
       },
-      "required": ["document_type", "summary", "key_points"]
+      "required": ["title", "authors", "abstract", "sections", "figures", "tables", "key_findings", "references_count"]
     },
     "settings": {
       "extraction_mode": "PREMIUM",
-      "system_prompt": null,
-      "citation_bbox": true,
-      "use_reasoning": false,
+      "system_prompt": "You are extracting structured data from academic research papers. Preserve the logical structure of sections. For multi-column layouts, read content in proper reading order. Extract figure and table references with their captions. Capture all section headings and their complete text content.",
       "cite_sources": true,
-      "confidence_scores": true
+      "confidence_scores": true,
+      "chunk_mode": "SECTION",
+      "high_resolution_mode": true
     }
   },
   "split": {
@@ -38,7 +120,7 @@
   },
   "parse": {
     "settings": {
-      "tier": "agentic",
+      "tier": "agentic_plus",
       "version": "latest"
     }
   }
