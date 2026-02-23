@@ -33,13 +33,29 @@ export default function HomePage() {
   const dragCounter = useRef(0)
 
   const handleFileUpload = useCallback(async (file: File) => {
-    const url = URL.createObjectURL(file)
-    setFileUrl(url)
     setFileName(file.name)
     setExtraction(null)
     setExtractionError(null)
     setIsExtracting(true)
 
+    // Upload PDF to our server so we can serve it via a same-origin URL
+    // (blob: URLs are blocked in cross-origin iframes)
+    try {
+      const pdfForm = new FormData()
+      pdfForm.append("file", file)
+      const pdfRes = await fetch("/api/pdf", { method: "POST", body: pdfForm })
+      if (pdfRes.ok) {
+        const { id } = await pdfRes.json()
+        setFileUrl(`/api/pdf?id=${id}`)
+      } else {
+        // Fallback to blob URL if server storage fails
+        setFileUrl(URL.createObjectURL(file))
+      }
+    } catch {
+      setFileUrl(URL.createObjectURL(file))
+    }
+
+    // Trigger LlamaCloud extraction in parallel
     try {
       const formData = new FormData()
       formData.append("file", file)
@@ -66,7 +82,7 @@ export default function HomePage() {
   }, [])
 
   const handleRemoveFile = useCallback(() => {
-    if (fileUrl) URL.revokeObjectURL(fileUrl)
+    if (fileUrl?.startsWith("blob:")) URL.revokeObjectURL(fileUrl)
     setFileUrl(null)
     setFileName(null)
     setExtraction(null)
