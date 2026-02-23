@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Llama Spatial Parser - AI Research Paper Assistant",
+  title: "Llama Spatial Parser | AI Research Paper Assistant",
   description:
     "Upload research papers and chat with AI to analyze, extract, and discuss their content using LlamaCloud structured extraction.",
 }
