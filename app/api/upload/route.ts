@@ -33,10 +33,14 @@ export async function POST(req: Request) {
       )
     }
 
+    // Buffer the file so the stream isn't exhausted
+    const fileBuffer = await file.arrayBuffer()
+    const fileBlob = new Blob([fileBuffer], { type: file.type })
+
     // Step 1: Upload file to LlamaCloud
     // The LlamaCloud REST API expects the field name "upload_file"
     const uploadForm = new FormData()
-    uploadForm.append("upload_file", file, file.name)
+    uploadForm.append("upload_file", fileBlob, file.name)
     uploadForm.append("purpose", "user_data")
 
     console.log("[v0] Uploading file to LlamaCloud:", file.name, file.size, "bytes")
@@ -76,10 +80,15 @@ export async function POST(req: Request) {
         body: workflowBody,
       })
     } catch (fetchErr) {
-      console.log("[v0] Workflow fetch error:", fetchErr)
+      const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+      const errCause = fetchErr instanceof Error && fetchErr.cause ? String(fetchErr.cause) : "none"
+      const errStack = fetchErr instanceof Error ? fetchErr.stack : "no stack"
+      console.log("[v0] Workflow fetch error message:", errMsg)
+      console.log("[v0] Workflow fetch error cause:", errCause)
+      console.log("[v0] Workflow fetch error stack:", errStack)
       return NextResponse.json(
         {
-          error: `Workflow connection failed. Check LLAMA_DEPLOY_NAME env var. URL: ${workflowUrl}`,
+          error: `Workflow connection failed: ${errMsg}. Cause: ${errCause}. URL: ${workflowUrl}`,
         },
         { status: 502 }
       )
