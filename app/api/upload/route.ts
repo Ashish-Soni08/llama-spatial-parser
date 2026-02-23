@@ -30,9 +30,12 @@ export async function POST(req: Request) {
     }
 
     // Step 1: Upload file to LlamaCloud
+    // The LlamaCloud REST API expects the field name "upload_file"
     const uploadForm = new FormData()
-    uploadForm.append("file", file)
+    uploadForm.append("upload_file", file, file.name)
     uploadForm.append("purpose", "user_data")
+
+    console.log("[v0] Uploading file to LlamaCloud:", file.name, file.size, "bytes")
 
     const uploadRes = await fetch(`${LLAMA_CLOUD_BASE}/api/v1/files`, {
       method: "POST",
@@ -50,6 +53,7 @@ export async function POST(req: Request) {
 
     const uploadData = await uploadRes.json()
     const fileId = uploadData.id
+    console.log("[v0] File uploaded, id:", fileId)
 
     // Step 2: Trigger the process-file workflow
     const workflowRes = await fetch(
@@ -74,6 +78,7 @@ export async function POST(req: Request) {
 
     const workflowData = await workflowRes.json()
     const handlerId = workflowData.handler_id
+    console.log("[v0] Workflow triggered, handler_id:", handlerId)
 
     // Step 3: Poll for workflow completion
     const maxAttempts = 60
@@ -92,6 +97,7 @@ export async function POST(req: Request) {
       if (!statusRes.ok) continue
 
       const statusData = await statusRes.json()
+      console.log("[v0] Poll", i + 1, "status:", statusData.status)
 
       if (statusData.status === "completed" || statusData.result) {
         let extraction = statusData.result
