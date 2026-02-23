@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 
 const LLAMA_CLOUD_BASE = "https://api.cloud.llamaindex.ai"
-const DEPLOYMENT_BASE = `${LLAMA_CLOUD_BASE}/deployments/llama-spatial-parser`
+// The deployment name is set when deploying to LlamaCloud.
+// Override via LLAMA_DEPLOY_NAME env var if the name has a random suffix.
+const DEPLOY_NAME =
+  process.env.LLAMA_DEPLOY_NAME || "llama-spatial-parser"
+const DEPLOYMENT_BASE = `${LLAMA_CLOUD_BASE}/deployments/${DEPLOY_NAME}`
 
 export const maxDuration = 120
 
@@ -56,20 +60,34 @@ export async function POST(req: Request) {
     console.log("[v0] File uploaded, id:", fileId)
 
     // Step 2: Trigger the process-file workflow
-    const workflowRes = await fetch(
-      `${DEPLOYMENT_BASE}/workflows/process-file/run`,
-      {
+    const workflowUrl = `${DEPLOYMENT_BASE}/workflows/process-file/run`
+    const workflowBody = JSON.stringify({ start_event: { file_id: fileId } })
+    console.log("[v0] Triggering workflow at:", workflowUrl)
+    console.log("[v0] Workflow body:", workflowBody)
+
+    let workflowRes: Response
+    try {
+      workflowRes = await fetch(workflowUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ start_event: { file_id: fileId } }),
-      }
-    )
+        body: workflowBody,
+      })
+    } catch (fetchErr) {
+      console.log("[v0] Workflow fetch error:", fetchErr)
+      return NextResponse.json(
+        {
+          error: `Workflow connection failed. Check LLAMA_DEPLOY_NAME env var. URL: ${workflowUrl}`,
+        },
+        { status: 502 }
+      )
+    }
 
     if (!workflowRes.ok) {
       const text = await workflowRes.text()
+      console.log("[v0] Workflow trigger failed:", workflowRes.status, text)
       return NextResponse.json(
         { error: `Workflow trigger failed: ${text}` },
         { status: workflowRes.status }
