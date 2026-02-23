@@ -59,8 +59,8 @@ export async function POST(req: Request) {
     const fileId = uploadData.id
     console.log("[v0] File uploaded, id:", fileId)
 
-    // Step 2: Trigger the process-file workflow
-    const workflowUrl = `${DEPLOYMENT_BASE}/workflows/process-file/run`
+    // Step 2: Trigger the process-file workflow (run-nowait returns handler_id immediately)
+    const workflowUrl = `${DEPLOYMENT_BASE}/workflows/process-file/run-nowait`
     const workflowBody = JSON.stringify({ start_event: { file_id: fileId } })
     console.log("[v0] Triggering workflow at:", workflowUrl)
     console.log("[v0] Workflow body:", workflowBody)
@@ -106,16 +106,24 @@ export async function POST(req: Request) {
       await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
       const statusRes = await fetch(
-        `${DEPLOYMENT_BASE}/workflows/process-file/handlers/${handlerId}`,
+        `${DEPLOYMENT_BASE}/handlers/${handlerId}`,
         {
           headers: { Authorization: `Bearer ${apiKey}` },
         }
       )
 
-      if (!statusRes.ok) continue
+      // 202 = still running, keep polling
+      if (statusRes.status === 202) {
+        console.log("[v0] Poll", i + 1, "- still running (202)")
+        continue
+      }
+      if (!statusRes.ok) {
+        console.log("[v0] Poll", i + 1, "- unexpected status:", statusRes.status)
+        continue
+      }
 
       const statusData = await statusRes.json()
-      console.log("[v0] Poll", i + 1, "status:", statusData.status)
+      console.log("[v0] Poll", i + 1, "status:", statusData.status, JSON.stringify(statusData).slice(0, 200))
 
       if (statusData.status === "completed" || statusData.result) {
         let extraction = statusData.result
