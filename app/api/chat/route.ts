@@ -3,14 +3,12 @@ import {
   streamText,
   tool,
   type UIMessage,
-  type InferUITools,
-  type UIDataTypes,
 } from "ai"
 import { z } from "zod"
 
 export const maxDuration = 60
 
-// Client-side tool: no `execute` function -- handled in the chat UI
+// Client-side tool: no `execute` function -- handled in the chat UI via onToolCall
 const navigateToPageTool = tool({
   description:
     "Navigate the PDF viewer to a specific page. Use this whenever you reference content from a specific page, figure, table, or equation in the paper. This helps the user see exactly what you are discussing.",
@@ -24,18 +22,11 @@ const navigateToPageTool = tool({
         "Brief label for what is on this page (e.g. 'Figure 2', 'Abstract', 'Table 1')"
       ),
   }),
-  outputSchema: z.string(),
 })
 
 const tools = {
   navigateToPage: navigateToPageTool,
 } as const
-
-export type ChatToolMessage = UIMessage<
-  never,
-  UIDataTypes,
-  InferUITools<typeof tools>
->
 
 interface ExtractionData {
   title?: string | null
@@ -131,11 +122,13 @@ No paper has been uploaded yet. Greet the user and let them know they can upload
 }
 
 export async function POST(req: Request) {
+  console.log("[v0] Chat route called")
   const {
     messages,
     extraction,
   }: { messages: UIMessage[]; extraction?: ExtractionData | null } =
     await req.json()
+  console.log("[v0] Chat messages count:", messages?.length, "has extraction:", !!extraction)
 
   const result = streamText({
     model: "openai/gpt-4o",

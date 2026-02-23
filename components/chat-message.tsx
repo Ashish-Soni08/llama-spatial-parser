@@ -113,8 +113,14 @@ export function ChatMessage({
                 }
 
                 // Render navigateToPage tool calls as clickable page reference chips
-                if (part.type === "tool-navigateToPage") {
-                  const { pageNumber, reason } = part.input ?? {}
+                if (
+                  part.type === "tool-invocation" &&
+                  part.toolInvocation.toolName === "navigateToPage"
+                ) {
+                  const { pageNumber, reason } = (part.toolInvocation.input ?? {}) as {
+                    pageNumber?: number
+                    reason?: string
+                  }
                   if (!pageNumber) return null
                   return (
                     <button
@@ -134,6 +140,9 @@ export function ChatMessage({
                     </button>
                   )
                 }
+
+                // Skip other tool-invocation parts (e.g. pending state)
+                if (part.type === "tool-invocation") return null
 
                 return null
               })}

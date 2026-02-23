@@ -7,7 +7,6 @@ import {
   lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
 } from "ai"
-import type { ChatToolMessage } from "@/app/api/chat/route"
 import { ChatMessage } from "@/components/chat-message"
 import {
   ArrowUp,
@@ -158,20 +157,19 @@ export function ChatPanel({
   onNavigateRef.current = onNavigateToPage
 
   const { messages, sendMessage, addToolOutput, status } =
-    useChat<ChatToolMessage>({
+    useChat({
       transport,
       sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 
       onToolCall({ toolCall }) {
-        if (toolCall.dynamic) return
-
         if (toolCall.toolName === "navigateToPage") {
-          const { pageNumber } = toolCall.input
-          onNavigateRef.current(pageNumber)
+          const input = toolCall.input as { pageNumber: number; reason: string }
+          onNavigateRef.current(input.pageNumber)
+          // Don't await addToolOutput with sendAutomaticallyWhen -- can cause deadlocks
           addToolOutput({
             tool: "navigateToPage",
             toolCallId: toolCall.toolCallId,
-            output: `Navigated to page ${pageNumber}`,
+            output: `Navigated to page ${input.pageNumber}`,
           })
         }
       },
