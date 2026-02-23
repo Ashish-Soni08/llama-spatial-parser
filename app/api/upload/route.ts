@@ -64,7 +64,7 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ file_id: fileId }),
+        body: JSON.stringify({ start_event: { file_id: fileId } }),
       }
     )
 
