@@ -1,10 +1,41 @@
 import {
   convertToModelMessages,
   streamText,
+  tool,
   type UIMessage,
+  type InferUITools,
+  type UIDataTypes,
 } from "ai"
+import { z } from "zod"
 
 export const maxDuration = 60
+
+// Client-side tool: no `execute` function -- handled in the chat UI
+const navigateToPageTool = tool({
+  description:
+    "Navigate the PDF viewer to a specific page. Use this whenever you reference content from a specific page, figure, table, or equation in the paper. This helps the user see exactly what you are discussing.",
+  inputSchema: z.object({
+    pageNumber: z
+      .number()
+      .describe("The 1-indexed page number to navigate to"),
+    reason: z
+      .string()
+      .describe(
+        "Brief label for what is on this page (e.g. 'Figure 2', 'Abstract', 'Table 1')"
+      ),
+  }),
+  outputSchema: z.string(),
+})
+
+const tools = {
+  navigateToPage: navigateToPageTool,
+} as const
+
+export type ChatToolMessage = UIMessage<
+  never,
+  UIDataTypes,
+  InferUITools<typeof tools>
+>
 
 interface ExtractionData {
   title?: string | null
@@ -31,7 +62,9 @@ Your strengths:
 - Spotting strengths, limitations, and potential future directions
 - Explaining technical concepts at the level the user needs
 
-Be concise but thorough. Use markdown formatting for structure. When referencing specific parts of the paper, be precise about which section, figure, or table you're discussing.`
+Be concise but thorough. Use markdown formatting for structure. When referencing specific parts of the paper, be precise about which section, figure, or table you're discussing.
+
+IMPORTANT: Whenever you discuss content that exists on a specific page of the paper (a figure, table, equation, section heading, or key passage), use the navigateToPage tool to direct the PDF viewer to that page. This lets the user see exactly what you are referencing. You can call navigateToPage multiple times in a single response if you reference content across different pages.`
 
   if (!extraction) {
     return `${base}
@@ -108,10 +141,9 @@ export async function POST(req: Request) {
     model: "openai/gpt-4o",
     system: buildSystemPrompt(extraction),
     messages: await convertToModelMessages(messages),
+    tools,
     abortSignal: req.signal,
   })
 
-  return result.toUIMessageStreamResponse({
-    originalMessages: messages,
-  })
+  return result.toUIMessageStreamResponse({ originalMessages: messages })
 }

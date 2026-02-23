@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import type { UIMessage } from "ai"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { Bot, User, Copy, Check } from "lucide-react"
+import { Bot, User, Copy, Check, FileText } from "lucide-react"
 
 function getMessageText(message: UIMessage): string {
   if (!message.parts || !Array.isArray(message.parts)) return ""
@@ -18,9 +18,14 @@ function getMessageText(message: UIMessage): string {
 interface ChatMessageProps {
   message: UIMessage
   isStreaming?: boolean
+  onNavigateToPage?: (page: number) => void
 }
 
-export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  isStreaming,
+  onNavigateToPage,
+}: ChatMessageProps) {
   const isUser = message.role === "user"
   const text = getMessageText(message)
   const [copied, setCopied] = useState(false)
@@ -98,9 +103,40 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
             <p className="whitespace-pre-wrap">{text}</p>
           ) : (
             <div className="prose-chat">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {text}
-              </ReactMarkdown>
+              {message.parts?.map((part, index) => {
+                if (part.type === "text") {
+                  return (
+                    <ReactMarkdown key={index} remarkPlugins={[remarkGfm]}>
+                      {part.text}
+                    </ReactMarkdown>
+                  )
+                }
+
+                // Render navigateToPage tool calls as clickable page reference chips
+                if (part.type === "tool-navigateToPage") {
+                  const { pageNumber, reason } = part.input ?? {}
+                  if (!pageNumber) return null
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => onNavigateToPage?.(pageNumber)}
+                      className="my-1 mr-1 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/10"
+                      aria-label={`Go to page ${pageNumber}: ${reason || ""}`}
+                    >
+                      <FileText className="h-3 w-3" />
+                      <span>Page {pageNumber}</span>
+                      {reason && (
+                        <>
+                          <span className="text-primary/40">|</span>
+                          <span className="text-primary/80">{reason}</span>
+                        </>
+                      )}
+                    </button>
+                  )
+                }
+
+                return null
+              })}
               {isStreaming && (
                 <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground" />
               )}

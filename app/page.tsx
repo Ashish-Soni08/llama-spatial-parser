@@ -26,6 +26,8 @@ export default function HomePage() {
   const [extraction, setExtraction] = useState<ExtractionData | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
   const [splitPercent, setSplitPercent] = useState(50)
   const [isDraggingSplitter, setIsDraggingSplitter] = useState(false)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
@@ -37,6 +39,8 @@ export default function HomePage() {
     setExtraction(null)
     setExtractionError(null)
     setIsExtracting(true)
+    setCurrentPage(1)
+    setTotalPages(0)
 
     // Upload PDF to our server so we can serve it via a same-origin URL
     // (blob: URLs are blocked in cross-origin iframes)
@@ -88,6 +92,8 @@ export default function HomePage() {
     setExtraction(null)
     setExtractionError(null)
     setIsExtracting(false)
+    setCurrentPage(1)
+    setTotalPages(0)
   }, [fileUrl])
 
   // Resizable splitter
@@ -209,6 +215,7 @@ export default function HomePage() {
           extractionError={extractionError}
           onFileUpload={handleFileUpload}
           hasDocument={!!fileUrl}
+          onNavigateToPage={setCurrentPage}
         />
       </div>
 
@@ -241,6 +248,10 @@ export default function HomePage() {
         <DocumentPanel
           fileUrl={fileUrl}
           fileName={fileName}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          onTotalPagesChange={setTotalPages}
           onRemoveFile={handleRemoveFile}
           onFileUpload={handleFileUpload}
         />

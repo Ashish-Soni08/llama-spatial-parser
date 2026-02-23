@@ -1,11 +1,22 @@
 "use client"
 
 import { useCallback, useRef } from "react"
+import dynamic from "next/dynamic"
 import { FileText, Upload, X } from "lucide-react"
+
+// react-pdf requires browser APIs, so we disable SSR
+const PdfViewer = dynamic(
+  () => import("@/components/pdf-viewer").then((m) => m.PdfViewer),
+  { ssr: false }
+)
 
 interface DocumentPanelProps {
   fileUrl: string | null
   fileName: string | null
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  onTotalPagesChange: (total: number) => void
   onRemoveFile: () => void
   onFileUpload: (file: File) => void
 }
@@ -13,6 +24,10 @@ interface DocumentPanelProps {
 export function DocumentPanel({
   fileUrl,
   fileName,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onTotalPagesChange,
   onRemoveFile,
   onFileUpload,
 }: DocumentPanelProps) {
@@ -74,20 +89,28 @@ export function DocumentPanel({
             {fileName}
           </span>
         </div>
-        <button
-          onClick={onRemoveFile}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Remove document"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {totalPages > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {currentPage} / {totalPages}
+            </span>
+          )}
+          <button
+            onClick={onRemoveFile}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Remove document"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <iframe
-          src={`${fileUrl}#toolbar=1&navpanes=0`}
-          className="h-full w-full border-0"
-          title={`PDF preview: ${fileName}`}
+        <PdfViewer
+          fileUrl={fileUrl}
+          currentPage={currentPage}
+          onPageChange={onPageChange}
+          onTotalPagesChange={onTotalPagesChange}
         />
       </div>
     </div>

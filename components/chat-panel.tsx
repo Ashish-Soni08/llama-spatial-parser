@@ -2,7 +2,12 @@
 
 import { useRef, useEffect, useState, useCallback, memo } from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, type UIMessage } from "ai"
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+} from "ai"
+import type { ChatToolMessage } from "@/app/api/chat/route"
 import { ChatMessage } from "@/components/chat-message"
 import {
   ArrowUp,
@@ -23,6 +28,7 @@ interface ChatPanelProps {
   extractionError: string | null
   onFileUpload: (file: File) => void
   hasDocument: boolean
+  onNavigateToPage: (page: number) => void
 }
 
 const SUGGESTED_PROMPTS = [
@@ -37,11 +43,19 @@ const MemoizedMessage = memo(
   function MemoizedMessage({
     message,
     isStreaming,
+    onNavigateToPage,
   }: {
     message: UIMessage
     isStreaming: boolean
+    onNavigateToPage: (page: number) => void
   }) {
-    return <ChatMessage message={message} isStreaming={isStreaming} />
+    return (
+      <ChatMessage
+        message={message}
+        isStreaming={isStreaming}
+        onNavigateToPage={onNavigateToPage}
+      />
+    )
   },
   (prev, next) => {
     // Only re-render if the message id changed or streaming state changed
@@ -113,6 +127,7 @@ export function ChatPanel({
   extractionError,
   onFileUpload,
   hasDocument,
+  onNavigateToPage,
 }: ChatPanelProps) {
   const [input, setInput] = useState("")
   const [pendingFile, setPendingFile] = useState<File | null>(null)
@@ -139,7 +154,28 @@ export function ChatPanel({
       })
   )
 
-  const { messages, sendMessage, status } = useChat({ transport })
+  const onNavigateRef = useRef(onNavigateToPage)
+  onNavigateRef.current = onNavigateToPage
+
+  const { messages, sendMessage, addToolOutput, status } =
+    useChat<ChatToolMessage>({
+      transport,
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+
+      onToolCall({ toolCall }) {
+        if (toolCall.dynamic) return
+
+        if (toolCall.toolName === "navigateToPage") {
+          const { pageNumber } = toolCall.input
+          onNavigateRef.current(pageNumber)
+          addToolOutput({
+            tool: "navigateToPage",
+            toolCallId: toolCall.toolCallId,
+            output: `Navigated to page ${pageNumber}`,
+          })
+        }
+      },
+    })
 
   const isLoading = status === "streaming" || status === "submitted"
 
@@ -307,6 +343,7 @@ export function ChatPanel({
                   i === messages.length - 1 &&
                   message.role === "assistant"
                 }
+                onNavigateToPage={onNavigateToPage}
               />
             ))}
             <div ref={messagesEndRef} />
