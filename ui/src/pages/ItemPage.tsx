@@ -1,14 +1,19 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AcceptReject,
-  ExtractedDataDisplay,
   FilePreview,
   useItemData,
   type Highlight,
   type ExtractedData,
   Button,
 } from "@llamaindex/ui";
-import { Clock, XCircle, Download } from "lucide-react";
+import {
+  Clock,
+  XCircle,
+  Download,
+  SendHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useToolbar } from "@/lib/ToolbarContext";
 import { useNavigate } from "react-router-dom";
@@ -16,14 +21,20 @@ import { modifyJsonSchema } from "@llamaindex/ui/lib";
 import { APP_TITLE } from "@/lib/config";
 import { downloadExtractedDataItem } from "@/lib/export";
 import { useMetadataContext } from "@/lib/MetadataProvider";
-import { convertBoundingBoxesToHighlights } from "@/lib/utils";
+import { buildGroundedAnswer, type GroundedAnswer } from "@/lib/qa";
 
-/**
- * Select the appropriate schema based on the discriminator field value.
- * If multiple schemas are provided and the item has a discriminator value,
- * use the type-specific schema for a focused editing experience.
- * Otherwise, fall back to the union schema.
- */
+interface ChatTurn {
+  id: string;
+  question: string;
+  answer: GroundedAnswer;
+}
+
+const SUGGESTED_QUESTIONS = [
+  "What is the core research objective of this paper?",
+  "Which dataset and evaluation metrics are used?",
+  "What are the main findings and limitations?",
+];
+
 function selectSchemaForItem(
   metadata: {
     json_schema: any;
@@ -34,22 +45,16 @@ function selectSchemaForItem(
 ): any {
   const { schemas, discriminator_field, json_schema } = metadata;
 
-  // If no discriminator support, use the union schema
   if (!schemas || !discriminator_field) {
     return json_schema;
   }
 
-  // Get the discriminator value from the extracted data
-  // item.data contains wrapper fields (status, file_id, etc.)
-  // item.data.data contains the actual extracted fields including the discriminator
   const discriminatorValue = itemData?.data?.data?.[discriminator_field];
 
-  // If we have a valid discriminator value and a matching schema, use it
   if (discriminatorValue && schemas[discriminatorValue]) {
     return schemas[discriminatorValue];
   }
 
-  // Fall back to the union schema
   return json_schema;
 }
 
@@ -57,28 +62,28 @@ export default function ItemPage() {
   const { itemId } = useParams<{ itemId: string }>();
   const { setButtons, setBreadcrumbs } = useToolbar();
   const [highlight, setHighlight] = useState<Highlight | undefined>(undefined);
+  const [question, setQuestion] = useState("");
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
   const { metadata } = useMetadataContext();
-  // Use the hook to fetch item data
+
   const itemHookData = useItemData<any>({
-    // order/remove fields as needed here
     jsonSchema: modifyJsonSchema(metadata.json_schema, {}),
     itemId: itemId as string,
     isMock: false,
   });
 
-  // Select the appropriate schema based on discriminator field
-  const selectedSchema = useMemo(() => {
-    return selectSchemaForItem(metadata, itemHookData.item);
-  }, [metadata, itemHookData.item]);
+  const selectedSchema = useMemo(
+    () => selectSchemaForItem(metadata, itemHookData.item),
+    [metadata, itemHookData.item],
+  );
 
-  // Modify the selected schema for display
-  const displaySchema = useMemo(() => {
-    return modifyJsonSchema(selectedSchema, {});
-  }, [selectedSchema]);
+  const displaySchema = useMemo(
+    () => modifyJsonSchema(selectedSchema, {}),
+    [selectedSchema],
+  );
 
   const navigate = useNavigate();
 
-  // Update breadcrumb when item data loads
   useEffect(() => {
     const extractedData = itemHookData.item?.data as
       | ExtractedData<unknown>
@@ -95,14 +100,13 @@ export default function ItemPage() {
     }
 
     return () => {
-      // Reset to default breadcrumb when leaving the page
       setBreadcrumbs([{ label: APP_TITLE, href: "/" }]);
     };
   }, [itemHookData.item?.data, setBreadcrumbs]);
 
   useEffect(() => {
     setButtons(() => [
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2" key="toolbar-actions">
         <Button
           variant="outline"
           size="sm"
@@ -126,29 +130,62 @@ export default function ItemPage() {
     };
   }, [itemHookData.data, setButtons]);
 
-  const {
-    item: itemData,
-    updateData,
-    loading: isLoading,
-    error,
-  } = itemHookData;
+  const { item: itemData, loading: isLoading, error } = itemHookData;
+
+  const extractedData = itemData?.data as ExtractedData<any> | undefined;
+  const extractedFields = extractedData?.data as
+    | Record<string, unknown>
+    | undefined;
+  const extractedMetadata =
+    (extractedData?.metadata as Record<string, unknown> | undefined) ?? {};
+
+  const onAsk = (requestedQuestion: string) => {
+    const input = requestedQuestion.trim();
+    if (!input) {
+      return;
+    }
+
+    const answer = buildGroundedAnswer(
+      input,
+      extractedFields,
+      extractedMetadata,
+    );
+    setTurns((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        question: input,
+        answer,
+      },
+    ]);
+    setQuestion("");
+
+    const firstHighlight = answer.snippets.flatMap(
+      (snippet) => snippet.highlights,
+    )[0];
+    if (firstHighlight) {
+      setHighlight(firstHighlight);
+    }
+  };
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <Clock className="h-8 w-8 animate-spin mx-auto mb-2" />
-          <div className="text-sm text-gray-500">Loading item...</div>
+          <Clock className="mx-auto mb-2 h-8 w-8 animate-spin" />
+          <div className="text-sm text-gray-500">
+            Loading paper workspace...
+          </div>
         </div>
       </div>
     );
   }
 
-  if (error || !itemData) {
+  if (error || !itemData || !extractedData) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <XCircle className="mx-auto mb-2 h-8 w-8 text-red-500" />
           <div className="text-sm text-gray-500">
             Error loading item: {error || "Item not found"}
           </div>
@@ -157,45 +194,137 @@ export default function ItemPage() {
     );
   }
 
-  // Cast itemData.data to ExtractedData for proper typing
-  const extractedData = itemData.data as ExtractedData<any>;
-  const fileId = extractedData.file_id;
-
   return (
-    <div className="flex h-full bg-gray-50">
-      {/* Left Side - File Preview */}
-      <div className="w-1/2 border-r h-full border-gray-200 bg-white">
-        {fileId && (
+    <div className="grid h-full grid-cols-1 bg-slate-100 xl:grid-cols-[1.2fr_1fr]">
+      <section className="h-full border-r border-slate-200 bg-white">
+        {extractedData.file_id && (
           <FilePreview
-            fileId={fileId}
+            fileId={extractedData.file_id}
             onBoundingBoxClick={(box, pageNumber) => {
-              console.log("Bounding box clicked:", box, "on page:", pageNumber);
+              const anyBox = box as {
+                x: number;
+                y: number;
+                w?: number;
+                h?: number;
+                width?: number;
+                height?: number;
+              };
+              setHighlight({
+                page: pageNumber ?? 1,
+                x: anyBox.x,
+                y: anyBox.y,
+                width: anyBox.width ?? anyBox.w ?? 0,
+                height: anyBox.height ?? anyBox.h ?? 0,
+              });
             }}
             highlight={highlight}
           />
         )}
-      </div>
+      </section>
 
-      {/* Right Side - Review Panel */}
-      <div className="flex-1 bg-white h-full overflow-y-auto">
-        <div className="p-4 space-y-4">
-          {/* Extracted Data */}
-          <ExtractedDataDisplay<any>
-            extractedData={extractedData}
-            title="Extracted Data"
-            onChange={(updatedData) => {
-              updateData(updatedData);
-            }}
-            onHoverField={(args) => {
-              const highlights = convertBoundingBoxesToHighlights(
-                args?.metadata?.citation,
-              );
-              setHighlight(highlights[0]);
-            }}
-            jsonSchema={displaySchema}
-          />
+      <section className="flex h-full flex-col border-t border-slate-200 bg-white xl:border-t-0">
+        <header className="border-b border-slate-200 p-4">
+          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <Sparkles className="h-4 w-4" />
+            Grounded Research Q&A
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">
+            Ask this paper anything
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Answers are generated from extracted fields and linked back to
+            visual citations.
+          </p>
+        </header>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          {turns.length === 0 && (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">
+                Try one of these prompts to start grounded analysis:
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {SUGGESTED_QUESTIONS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => onAsk(prompt)}
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:border-slate-400"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {turns.map((turn) => (
+            <article key={turn.id} className="space-y-2">
+              <div className="rounded-xl bg-slate-900 px-3 py-2 text-sm text-white">
+                {turn.question}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="whitespace-pre-line text-sm text-slate-700">
+                  {turn.answer.answer}
+                </p>
+
+                {turn.answer.snippets.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {turn.answer.snippets.map((snippet, index) => (
+                      <button
+                        key={`${turn.id}-${snippet.fieldPath}-${index}`}
+                        onClick={() => {
+                          const first = snippet.highlights[0];
+                          if (first) {
+                            setHighlight(first);
+                          }
+                        }}
+                        className="w-full rounded-lg border border-slate-200 bg-white p-2 text-left hover:border-slate-300"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {snippet.fieldPath}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800 line-clamp-3">
+                          {snippet.value}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {snippet.citations.length > 0
+                            ? `${snippet.citations.length} visual citation(s) available`
+                            : "No bounding box citation attached"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </article>
+          ))}
         </div>
-      </div>
+
+        <footer className="border-t border-slate-200 p-4">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              rows={2}
+              placeholder="Ask about objective, datasets, methods, results, or limitations..."
+              className="w-full resize-none rounded-xl border border-slate-300 p-3 text-sm outline-none ring-slate-200 transition focus:border-slate-400 focus:ring"
+            />
+            <button
+              onClick={() => onAsk(question)}
+              className="inline-flex h-10 items-center gap-1 rounded-xl bg-slate-900 px-3 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              <SendHorizontal className="h-4 w-4" />
+              Ask
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Schema loaded with{" "}
+            {Object.keys(displaySchema?.properties ?? {}).length} top-level
+            fields.
+          </p>
+        </footer>
+      </section>
     </div>
   );
 }
